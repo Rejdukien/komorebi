@@ -845,6 +845,35 @@ impl Window {
                     debug.exe_name = Some(exe_name.clone());
                     debug.class = Some(class.clone());
                     debug.path = Some(path.clone());
+
+                    // Early managed-override escape hatch: if a manage rule matches, allow
+                    // management even if style/ex_style retrieval fails.
+                    {
+                        let regex_identifiers = REGEX_IDENTIFIERS.lock();
+
+                        // Respect permaignore classes even for early override
+                        let permaignore_classes = PERMAIGNORE_CLASSES.lock();
+                        if permaignore_classes.contains(&class) {
+                            debug.matches_permaignore_class = Some(class.clone());
+                            return Ok(false);
+                        }
+                        drop(permaignore_classes);
+
+                        let manage_identifiers = MANAGE_IDENTIFIERS.lock();
+                        if let Some(rule) = should_act(
+                            &title,
+                            &exe_name,
+                            &class,
+                            &path,
+                            &manage_identifiers,
+                            &regex_identifiers,
+                        ) {
+                            debug.matches_managed_override = Some(rule);
+                            debug.should_manage = true;
+                            return Ok(true);
+                        }
+                    }
+
                     // calls for styles can fail quite often for events with windows that aren't really "windows"
                     // since we have moved up calls of should_manage to the beginning of the process_event handler,
                     // we should handle failures here gracefully to be able to continue the execution of process_event
